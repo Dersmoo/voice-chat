@@ -6,7 +6,10 @@
   "scripts": {
     "start": "electron .",
     "build": "electron-builder --win --x64",
-    "pack": "electron-builder --dir"
+    "pack": "electron-builder --dir",
+    "release:patch": "node ../release.js patch",
+    "release:minor": "node ../release.js minor",
+    "release:major": "node ../release.js major"
   },
   "dependencies": {
     "electron-updater": "6.3.9",
