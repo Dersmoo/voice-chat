@@ -53,6 +53,10 @@ async function boot() {
   document.getElementById("myCode").textContent = identity.code;
   document.getElementById("displayNameInput").value = identity.displayName;
 
+  // Show version in titlebar
+  const version = await api.getVersion();
+  document.getElementById("appVersion").textContent = `v${version}`;
+
   // Start messaging/presence connection
   if (identity.code && settings.serverUrl) {
     await messaging.start({

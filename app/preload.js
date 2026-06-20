@@ -35,4 +35,5 @@ contextBridge.exposeInMainWorld("voiceApp", {
 
   // ── Misc ──────────────────────────────────────────────────────────────────
   openExternal: (url) => ipcRenderer.send("shell:openExternal", url),
+  getVersion:   ()    => ipcRenderer.invoke("app:version"),
 });

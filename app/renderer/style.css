@@ -46,6 +46,14 @@ html, body {
   color: var(--accent);
 }
 
+.app-version {
+  font-size: 10px;
+  color: var(--text-dim);
+  margin-right: auto;
+  padding-left: 6px;
+  -webkit-app-region: drag;
+}
+
 .titlebar-controls {
   display: flex;
   gap: 4px;

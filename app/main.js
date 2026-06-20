@@ -205,6 +205,9 @@ ipcMain.on("window:maximize",  () => {
   mainWindow.isMaximized() ? mainWindow.unmaximize() : mainWindow.maximize();
 });
 
+// App version
+ipcMain.handle("app:version", () => app.getVersion());
+
 // Open external links safely
 ipcMain.on("shell:openExternal", (_, url) => {
   if (/^https?:\/\//.test(url)) shell.openExternal(url);
@@ -219,11 +222,18 @@ function setupAutoUpdater() {
   autoUpdater.autoDownload         = false;
   autoUpdater.autoInstallOnAppQuit = true;
 
-  // Point explicitly at the GitHub releases feed
+  // For public repos electron-updater can still hit unauthenticated rate limits.
+  // We store an optional GH token in user data — fine-grained, contents:read scope.
+  const tokenFile = path.join(USER_DATA, "gh_token.txt");
+  if (fs.existsSync(tokenFile)) {
+    process.env.GH_TOKEN = fs.readFileSync(tokenFile, "utf8").trim();
+  }
+
   autoUpdater.setFeedURL({
-    provider: "github",
-    owner:    "Dersmoo",
-    repo:     "voice-chat",
+    provider:    "github",
+    owner:       "Dersmoo",
+    repo:        "voice-chat",
+    releaseType: "release",
   });
 
   autoUpdater.on("update-available", (info) => {
