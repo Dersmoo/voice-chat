@@ -29,8 +29,9 @@ export class UserInbox {
       case "deliver":      return this.handleDeliver(request);
       case "group-invite": return this.handleGroupInvite(request);
       case "conversations":return this.handleConversations(request);
-      case "add-conversation": return this.handleAddConversation(request);
-      case "remove-conversation": return this.handleRemoveConversation(request);
+      case "add-conversation":      return this.handleAddConversation(request);
+      case "remove-conversation":   return this.handleRemoveConversation(request);
+      case "friend-request":        return this.handleFriendRequest(request);
       default:
         return new Response("Not found", { status: 404 });
     }
@@ -125,6 +126,13 @@ export class UserInbox {
   async handleAddConversation(request) {
     const body = await request.json();
     await this.addConversationToList(body.conversation);
+    // Notify live socket if connected so the other side sees the DM immediately
+    if (this.socket) {
+      this.safeSend(this.socket, {
+        type:         "conversation-added",
+        conversation: body.conversation,
+      });
+    }
     return new Response(JSON.stringify({ ok: true }), {
       headers: { "Content-Type": "application/json" },
     });
@@ -141,6 +149,21 @@ export class UserInbox {
       });
       await this.state.storage.put("conversations", convos);
     }
+  }
+
+  async handleFriendRequest(request) {
+    const body = await request.json();
+    const msg  = { type: "friend-request", code: body.code, displayName: body.displayName, sentAt: body.sentAt };
+    if (this.socket) {
+      this.safeSend(this.socket, msg);
+    } else {
+      // Queue it like a regular message so offline users get it on reconnect
+      const key = `queue:${body.sentAt}:fr:${body.code}`;
+      await this.state.storage.put(key, msg);
+    }
+    return new Response(JSON.stringify({ ok: true }), {
+      headers: { "Content-Type": "application/json" },
+    });
   }
 
   async handleRemoveConversation(request) {

@@ -120,7 +120,13 @@ export class VoiceClient extends EventTarget {
       case "welcome":
         this.myId = msg.id;
         this._emit("ready", { id: msg.id });
-        // Existing peers — we'll receive peer-joined for each
+        // Existing peers in the room — emit peerJoined for each and create offers
+        for (const peer of (msg.peers ?? [])) {
+          this._emit("peerJoined", { id: peer.id, name: peer.name, code: peer.code });
+          if (this.myId < peer.id) {
+            this._createOffer(peer.id);
+          }
+        }
         break;
 
       case "peer-joined":
@@ -132,6 +138,8 @@ export class VoiceClient extends EventTarget {
 
       case "peer-left":
         this._closePeer(msg.id);
+        // Always emit peerLeft from the signal, even if _closePeer already ran
+        // via peerConnectionState (duplicate emit is safe — UI deduplicates by id)
         this._emit("peerLeft", { id: msg.id });
         break;
 
@@ -205,8 +213,8 @@ export class VoiceClient extends EventTarget {
       const s = pc.connectionState;
       this._emit("peerConnectionState", { id: peerId, state: s });
       if (["disconnected", "failed", "closed"].includes(s)) {
+        // Only close locally — the server will send peer-left which triggers the UI update
         this._closePeer(peerId);
-        this._emit("peerLeft", { id: peerId });
       }
     };
 

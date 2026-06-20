@@ -9,9 +9,10 @@ const crypto = require("crypto");
 // ── Paths ─────────────────────────────────────────────────────────────────────
 
 const USER_DATA  = app.getPath("userData");
-const IDENTITY_FILE = path.join(USER_DATA, "identity.json");
-const FRIENDS_FILE  = path.join(USER_DATA, "friends.json");
-const SETTINGS_FILE = path.join(USER_DATA, "settings.json");
+const IDENTITY_FILE  = path.join(USER_DATA, "identity.json");
+const FRIENDS_FILE   = path.join(USER_DATA, "friends.json");
+const SETTINGS_FILE  = path.join(USER_DATA, "settings.json");
+const REQUESTS_FILE  = path.join(USER_DATA, "requests.json"); // pending incoming friend requests
 
 // ── Identity ──────────────────────────────────────────────────────────────────
 // Generated once on first launch, persisted forever.
@@ -91,6 +92,18 @@ let tray       = null;
 let identity   = loadOrCreateIdentity();
 let friends    = loadFriends();
 let settings   = loadSettings();
+let requests   = loadRequests(); // pending incoming friend requests
+
+function loadRequests() {
+  if (fs.existsSync(REQUESTS_FILE)) {
+    try { return JSON.parse(fs.readFileSync(REQUESTS_FILE, "utf8")); } catch {}
+  }
+  return [];
+}
+
+function saveRequests() {
+  fs.writeFileSync(REQUESTS_FILE, JSON.stringify(requests, null, 2));
+}
 
 // ── Window ────────────────────────────────────────────────────────────────────
 
@@ -167,15 +180,46 @@ ipcMain.handle("friends:add", (_, { code, displayName }) => {
   if (friends.some(f => f.code === code)) {
     return { error: "Already in your friend list." };
   }
+  // Return pending — the renderer will send the actual request via the messaging client
+  return { pending: true, code };
+});
 
-  const friend = {
-    code,
-    displayName: displayName?.trim().slice(0, 32) || code,
-    addedAt: Date.now(),
-  };
-  friends.push(friend);
-  saveFriends(friends);
-  return { friend };
+// Called by renderer after sending the friend-request message via messaging client
+ipcMain.handle("friends:request:sent", (_, { code, displayName }) => {
+  return { ok: true };
+});
+
+// Incoming request received via inbox WebSocket — renderer calls this to store it
+ipcMain.handle("friends:request:incoming", (_, { code, displayName, sentAt }) => {
+  if (requests.some(r => r.code === code)) return { ok: true }; // already have it
+  if (friends.some(f => f.code === code)) return { ok: true };  // already friends
+  requests.push({ code, displayName: displayName || code, sentAt: sentAt ?? Date.now() });
+  saveRequests();
+  return { ok: true };
+});
+
+ipcMain.handle("friends:requests:list", () => requests);
+
+ipcMain.handle("friends:request:accept", (_, code) => {
+  const req = requests.find(r => r.code === code);
+  if (!req) return { error: "Request not found" };
+
+  // Add as friend
+  if (!friends.some(f => f.code === code)) {
+    friends.push({ code, displayName: req.displayName, addedAt: Date.now() });
+    saveFriends(friends);
+  }
+
+  // Remove from pending
+  requests = requests.filter(r => r.code !== code);
+  saveRequests();
+  return { friends };
+});
+
+ipcMain.handle("friends:request:decline", (_, code) => {
+  requests = requests.filter(r => r.code !== code);
+  saveRequests();
+  return { ok: true };
 });
 
 ipcMain.handle("friends:remove", (_, code) => {
@@ -183,7 +227,6 @@ ipcMain.handle("friends:remove", (_, code) => {
   saveFriends(friends);
   return friends;
 });
-
 ipcMain.handle("friends:rename", (_, { code, displayName }) => {
   const f = friends.find(f => f.code === code);
   if (f) {

@@ -148,10 +148,18 @@
     <div class="section-label">Add friend</div>
     <div class="row-input">
       <input id="addCodeInput"  type="text" placeholder="XXXX-XXXX"   maxlength="9" />
-      <input id="addNameInput"  type="text" placeholder="Nickname"     maxlength="32" />
-      <button id="addFriendBtn" class="btn-primary btn-small">Add</button>
+      <input id="addNameInput"  type="text" placeholder="Nickname (optional)" maxlength="32" />
+      <button id="addFriendBtn" class="btn-primary btn-small">Send Request</button>
     </div>
     <div id="addFriendError" class="error-text"></div>
+    <div id="addFriendStatus" class="hint" style="min-height:16px"></div>
+
+    <!-- Pending requests -->
+    <div class="section-label">
+      Friend requests
+      <span id="requestBadge" class="tab-badge" style="display:none"></span>
+    </div>
+    <div id="requestList"></div>
 
     <!-- Friend list -->
     <div class="section-label">Friends</div>

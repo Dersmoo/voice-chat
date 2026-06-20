@@ -141,6 +141,27 @@ export class MessagingClient extends EventTarget {
         this._emit("groupInvite", { conversation: conv, invitedBy: data.invitedBy });
         break;
       }
+
+      case "conversation-added": {
+        const conv = data.conversation;
+        if (!this.conversations.has(conv.id)) {
+          this.conversations.set(conv.id, { meta: conv, messages: [] });
+        } else {
+          this.conversations.get(conv.id).meta = conv;
+        }
+        this._emit("conversationsLoaded");
+        break;
+      }
+
+      case "friend-request": {
+        // Someone sent us a friend request
+        this._emit("friendRequest", {
+          code:        data.code,
+          displayName: data.displayName,
+          sentAt:      data.sentAt,
+        });
+        break;
+      }
     }
   }
 
@@ -314,6 +335,24 @@ export class MessagingClient extends EventTarget {
     let total = 0;
     for (const count of this.unread.values()) total += count;
     return total;
+  }
+
+  // ── Friend requests ────────────────────────────────────────────────────────
+
+  async sendFriendRequest(theirCode) {
+    try {
+      await fetch(`${this.serverUrl}/inbox/${theirCode}/friend-request`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          code:        this.myCode,
+          displayName: this.myName,
+          sentAt:      Date.now(),
+        }),
+      });
+    } catch (err) {
+      console.error("sendFriendRequest error:", err);
+    }
   }
 
   // ── Room chat (ephemeral, over voice WebSocket) ────────────────────────────

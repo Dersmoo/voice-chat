@@ -49,6 +49,7 @@ async function boot() {
 
   populateSettings();
   renderFriendList();
+  renderRequests();
 
   document.getElementById("myCode").textContent = identity.code;
   document.getElementById("displayNameInput").value = identity.displayName;
@@ -300,16 +301,14 @@ document.getElementById("addFriendBtn").addEventListener("click", async () => {
     return;
   }
 
-  friends = await api.listFriends();
-  window.appFriends = friends;
-  renderFriendList();
+  // Send the actual friend request via the messaging client
+  await messaging.sendFriendRequest(rawCode);
+
   document.getElementById("addCodeInput").value = "";
   document.getElementById("addNameInput").value = "";
-
-  // Auto-open a DM with the new friend
-  if (window.autoOpenFriendDM) {
-    window.autoOpenFriendDM(rawCode);
-  }
+  errEl.textContent = "";
+  document.getElementById("addFriendStatus").textContent = "Friend request sent!";
+  setTimeout(() => { document.getElementById("addFriendStatus").textContent = ""; }, 3000);
 });
 
 // Format code input as user types (auto-insert dash)
@@ -357,6 +356,85 @@ function renderFriendList() {
     list.appendChild(row);
   }
 }
+
+// ── Friend requests ───────────────────────────────────────────────────────────
+
+async function renderRequests() {
+  const list     = document.getElementById("requestList");
+  const badge    = document.getElementById("requestBadge");
+  const requests = await api.listRequests();
+
+  badge.textContent   = requests.length || "";
+  badge.style.display = requests.length ? "inline" : "none";
+  list.innerHTML      = "";
+
+  if (!requests.length) {
+    const empty = document.createElement("div");
+    empty.className   = "hint";
+    empty.textContent = "No pending requests.";
+    list.appendChild(empty);
+    return;
+  }
+
+  for (const r of requests) {
+    const row = document.createElement("div");
+    row.className = "request-row";
+
+    const info = document.createElement("div");
+    info.className = "request-info";
+
+    const nameEl = document.createElement("span");
+    nameEl.className   = "friend-name";
+    nameEl.textContent = r.displayName || r.code;
+
+    const codeEl = document.createElement("span");
+    codeEl.className   = "friend-code";
+    codeEl.textContent = r.code;
+
+    info.appendChild(nameEl);
+    info.appendChild(codeEl);
+
+    const actions = document.createElement("div");
+    actions.style.display = "flex";
+    actions.style.gap     = "6px";
+
+    const acceptBtn = document.createElement("button");
+    acceptBtn.className   = "btn-small btn-primary";
+    acceptBtn.textContent = "Accept";
+    acceptBtn.addEventListener("click", async () => {
+      const res = await api.acceptRequest(r.code);
+      friends          = res.friends;
+      window.appFriends = friends;
+      renderFriendList();
+      renderRequests();
+      // Auto-open DM with new friend
+      if (window.autoOpenFriendDM) window.autoOpenFriendDM(r.code);
+    });
+
+    const declineBtn = document.createElement("button");
+    declineBtn.className   = "btn-small btn-danger";
+    declineBtn.textContent = "Decline";
+    declineBtn.addEventListener("click", async () => {
+      await api.declineRequest(r.code);
+      renderRequests();
+    });
+
+    actions.appendChild(acceptBtn);
+    actions.appendChild(declineBtn);
+    row.appendChild(info);
+    row.appendChild(actions);
+    list.appendChild(row);
+  }
+}
+
+// Listen for incoming friend requests via messaging client
+messaging.addEventListener("friendRequest", async ({ detail }) => {
+  await api.incomingRequest(detail.code, detail.displayName, detail.sentAt);
+  renderRequests();
+  // Flash the friends tab
+  document.querySelector('[data-tab="friends"]').classList.add("tab-notify");
+  setTimeout(() => document.querySelector('[data-tab="friends"]').classList.remove("tab-notify"), 3000);
+});
 
 // ── Settings tab ──────────────────────────────────────────────────────────────
 

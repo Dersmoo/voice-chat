@@ -14,6 +14,12 @@ contextBridge.exposeInMainWorld("voiceApp", {
   removeFriend:    (code)                   => ipcRenderer.invoke("friends:remove", code),
   renameFriend:    (code, displayName)      => ipcRenderer.invoke("friends:rename", { code, displayName }),
 
+  // ── Friend requests ───────────────────────────────────────────────────────
+  listRequests:        ()                          => ipcRenderer.invoke("friends:requests:list"),
+  incomingRequest:     (code, displayName, sentAt) => ipcRenderer.invoke("friends:request:incoming", { code, displayName, sentAt }),
+  acceptRequest:       (code)                      => ipcRenderer.invoke("friends:request:accept", code),
+  declineRequest:      (code)                      => ipcRenderer.invoke("friends:request:decline", code),
+
   // ── Settings ──────────────────────────────────────────────────────────────
   getSettings:     ()      => ipcRenderer.invoke("settings:get"),
   saveSettings:    (patch) => ipcRenderer.invoke("settings:save", patch),
