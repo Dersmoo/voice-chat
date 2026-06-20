@@ -17,7 +17,7 @@ class_name = "VoiceChatRoom"
 # Durable Object migration
 [[migrations]]
 tag = "v1"
-new_classes = ["VoiceChatRoom"]
+new_sqlite_classes = ["VoiceChatRoom"]
 
 # Environment variables — fill in your Cloudflare Realtime credentials
 [vars]
