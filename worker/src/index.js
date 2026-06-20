@@ -66,7 +66,6 @@ export default {
     if (inboxMatch) {
       return routeInbox(env, inboxMatch[1], inboxMatch[2], request);
     }
-
     // ── Conversation ─────────────────────────────────────────────────────────
     const convoMatch = path.match(/^\/conversation\/([a-zA-Z0-9_:.-]{1,128})\/(.+)$/);
     if (convoMatch) {

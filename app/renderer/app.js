@@ -305,6 +305,11 @@ document.getElementById("addFriendBtn").addEventListener("click", async () => {
   renderFriendList();
   document.getElementById("addCodeInput").value = "";
   document.getElementById("addNameInput").value = "";
+
+  // Auto-open a DM with the new friend
+  if (window.autoOpenFriendDM) {
+    window.autoOpenFriendDM(rawCode);
+  }
 });
 
 // Format code input as user types (auto-insert dash)

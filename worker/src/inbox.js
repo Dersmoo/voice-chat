@@ -30,6 +30,7 @@ export class UserInbox {
       case "group-invite": return this.handleGroupInvite(request);
       case "conversations":return this.handleConversations(request);
       case "add-conversation": return this.handleAddConversation(request);
+      case "remove-conversation": return this.handleRemoveConversation(request);
       default:
         return new Response("Not found", { status: 404 });
     }
@@ -140,6 +141,16 @@ export class UserInbox {
       });
       await this.state.storage.put("conversations", convos);
     }
+  }
+
+  async handleRemoveConversation(request) {
+    const { conversationId } = await request.json();
+    const convos = await this.state.storage.get("conversations") ?? [];
+    const updated = convos.filter(c => c.id !== conversationId);
+    await this.state.storage.put("conversations", updated);
+    return new Response(JSON.stringify({ ok: true }), {
+      headers: { "Content-Type": "application/json" },
+    });
   }
 
   // ── Flush queued messages to a newly connected socket ─────────────────────

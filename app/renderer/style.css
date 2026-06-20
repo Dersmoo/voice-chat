@@ -618,3 +618,27 @@ kbd {
   padding: 5px 12px;
 }
 .secondary:hover { background: var(--border); }
+
+/* ── Conversation header actions ───────────────────────────────────────────── */
+#convHeader {
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+#convHeaderActions {
+  margin-left: auto;
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+/* ── Favourite star in sidebar ─────────────────────────────────────────────── */
+.conv-fav-star {
+  color: var(--accent);
+  font-size: 11px;
+  flex-shrink: 0;
+}
