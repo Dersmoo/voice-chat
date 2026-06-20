@@ -27,7 +27,7 @@
     "publish": [
       {
         "provider": "github",
-        "owner": "Dersysmoo",
+        "owner": "Dersmoo",
         "repo": "voice-chat"
       }
     ],
@@ -48,6 +48,9 @@
       "src/**/*",
       "renderer/**/*",
       "assets/**/*"
-    ]
+    ],
+    "extraMetadata": {
+      "main": "main.js"
+    }
   }
 }

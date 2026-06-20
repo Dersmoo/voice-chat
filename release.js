@@ -47,13 +47,15 @@ if (!["patch", "minor", "major"].includes(bump)) {
   process.exit(1);
 }
 
-// ── Make sure working tree is clean ───────────────────────────────────────────
+// ── Commit any pending changes first ──────────────────────────────────────────
 
-step("Checking git status");
+step("Checking for uncommitted changes");
 const dirty = execSync("git status --porcelain", { cwd: ROOT }).toString().trim();
 if (dirty) {
-  console.error("Working tree has uncommitted changes. Commit or stash them first.");
-  process.exit(1);
+  console.log("Uncommitted changes found — committing them now:");
+  console.log(dirty);
+  run("git add -A");
+  run(`git commit -m "chore: pre-release changes"`);
 }
 
 // ── Bump version ──────────────────────────────────────────────────────────────
@@ -80,9 +82,12 @@ run(`git tag ${tag}`);
 step("Building Windows installer");
 run("npm run build", APP_DIR);
 
-// Find the installer — it'll be named with the new version
-const exeName = `Voice Chat Setup ${version}.exe`;
-const exePath = path.join(DIST_DIR, exeName);
+// Find the installer and blockmap
+const exeName       = `Voice Chat Setup ${version}.exe`;
+const blockmapName  = `${exeName}.blockmap`;
+const exePath       = path.join(DIST_DIR, exeName);
+const blockmapPath  = path.join(DIST_DIR, blockmapName);
+const latestYml     = path.join(DIST_DIR, "latest.yml");
 
 if (!fs.existsSync(exePath)) {
   console.error(`Build output not found: ${exePath}`);
@@ -101,8 +106,14 @@ run("git push --follow-tags");
 // ── Create GitHub release ─────────────────────────────────────────────────────
 
 step("Creating GitHub release");
+
+// Build file list — include blockmap and latest.yml if present (needed for auto-updater)
+const releaseFiles = [`"${exePath}"`];
+if (fs.existsSync(blockmapPath)) releaseFiles.push(`"${blockmapPath}"`);
+if (fs.existsSync(latestYml))    releaseFiles.push(`"${latestYml}"`);
+
 run(
-  `gh release create ${tag} "${exePath}" ` +
+  `gh release create ${tag} ${releaseFiles.join(" ")} ` +
   `--title "Voice Chat ${tag}" ` +
   `--notes "Release ${tag}" ` +
   `--latest`

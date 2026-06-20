@@ -216,8 +216,15 @@ function setupAutoUpdater() {
   // Don't check in dev mode (no published version to compare against)
   if (!app.isPackaged) return;
 
-  autoUpdater.autoDownload    = false;   // we control the download step
+  autoUpdater.autoDownload         = false;
   autoUpdater.autoInstallOnAppQuit = true;
+
+  // Point explicitly at the GitHub releases feed
+  autoUpdater.setFeedURL({
+    provider: "github",
+    owner:    "Dersmoo",
+    repo:     "voice-chat",
+  });
 
   autoUpdater.on("update-available", (info) => {
     // Tell the renderer an update is available
