@@ -82,6 +82,15 @@ export class VoiceClient extends EventTarget {
     this._cleanup();
   }
 
+  sendRoomChat(text) {
+    if (!text.trim()) return;
+    this._send({
+      type:   "room-chat",
+      text:   text.trim().slice(0, 2000),
+      sentAt: Date.now(),
+    });
+  }
+
   setMute(muted) {
     this._muted = muted;
     this._applyMute();
@@ -143,6 +152,18 @@ export class VoiceClient extends EventTarget {
 
       case "speaking":
         this._emit("peerSpeaking", { id: msg.from, speaking: msg.speaking });
+        break;
+
+      case "room-chat":
+        this._emit("roomChat", {
+          id:       msg.id,
+          roomId:   this.roomId,
+          from:     msg.from,
+          name:     msg.name,
+          text:     msg.text,
+          sentAt:   msg.sentAt,
+          conversationId: `room:${this.roomId}`,
+        });
         break;
     }
   }

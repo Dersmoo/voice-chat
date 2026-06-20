@@ -6,10 +6,16 @@
  * process (via window.voiceApp exposed by preload.js).
  */
 
-import { VoiceClient } from "../src/voiceClient.js";
+import { VoiceClient }     from "../src/voiceClient.js";
+import { MessagingClient } from "../src/messagingClient.js";
 
-const api    = window.voiceApp;
-const client = new VoiceClient();
+const api       = window.voiceApp;
+const client    = new VoiceClient();
+const messaging = new MessagingClient();
+
+// Expose for messages.js
+window.messagingClient    = messaging;
+window.voiceClientInstance = client;
 
 // ── App state ─────────────────────────────────────────────────────────────────
 
@@ -29,6 +35,10 @@ async function boot() {
     api.getSettings(),
   ]);
 
+  // Expose for messages.js
+  window.appIdentity = identity;
+  window.appFriends  = friends;
+
   // Prompt for display name on first launch
   if (!identity.displayName) {
     document.getElementById("tab-settings").classList.add("active");
@@ -42,6 +52,18 @@ async function boot() {
 
   document.getElementById("myCode").textContent = identity.code;
   document.getElementById("displayNameInput").value = identity.displayName;
+
+  // Start messaging/presence connection
+  if (identity.code && settings.serverUrl) {
+    await messaging.start({
+      serverUrl:   settings.serverUrl,
+      friendCode:  identity.code,
+      displayName: identity.displayName || "Anonymous",
+    });
+  }
+
+  // Signal messages.js that everything is ready
+  window.dispatchEvent(new Event("messagingReady"));
 }
 
 // ── Tab switching ─────────────────────────────────────────────────────────────
@@ -116,8 +138,23 @@ document.addEventListener("keyup", (e) => {
 
 // ── VoiceClient events ────────────────────────────────────────────────────────
 
+client.addEventListener("roomChat", ({ detail }) => {
+  messaging.receiveRoomMessage(detail);
+  if (window.renderConvList) window.renderConvList();
+});
+
 client.addEventListener("connected", () => {
   const room = roomInput.value.trim().replace(/[^a-zA-Z0-9_-]/g, "") || "general";
+
+  // Create ephemeral room conversation in messaging client
+  const convId = `room:${room}`;
+  if (!messaging.conversations.has(convId)) {
+    messaging.conversations.set(convId, {
+      meta: { id: convId, type: "room", name: `# ${room}`, members: [] },
+      messages: [],
+    });
+  }
+  if (window.renderConvList) window.renderConvList();
   joinPanel.style.display  = "none";
   roomPanel.style.display  = "flex";
   roomNameEl.textContent   = "# " + room;
@@ -244,6 +281,7 @@ document.getElementById("addFriendBtn").addEventListener("click", async () => {
   }
 
   friends = await api.listFriends();
+  window.appFriends = friends;
   renderFriendList();
   document.getElementById("addCodeInput").value = "";
   document.getElementById("addNameInput").value = "";

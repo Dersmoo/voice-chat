@@ -4,23 +4,35 @@ main = "src/index.js"
 compatibility_date = "2024-09-23"
 compatibility_flags = ["nodejs_compat"]
 
-# Custom domain — routes voice.dercraftia.com to this Worker
+# Custom domain
 routes = [
   { pattern = "voice.dercraftia.com/*", zone_name = "dercraftia.com" }
 ]
 
-# Durable Object binding for room management
+# Durable Object bindings
 [[durable_objects.bindings]]
 name = "ROOMS"
 class_name = "VoiceChatRoom"
 
-# Durable Object migration
+[[durable_objects.bindings]]
+name = "INBOXES"
+class_name = "UserInbox"
+
+[[durable_objects.bindings]]
+name = "CONVERSATIONS"
+class_name = "Conversation"
+
+# Migrations
 [[migrations]]
 tag = "v1"
 new_sqlite_classes = ["VoiceChatRoom"]
 
-# Environment variables — fill in your Cloudflare Realtime credentials
+[[migrations]]
+tag = "v2"
+new_sqlite_classes = ["UserInbox", "Conversation"]
+
+# Environment variables
 [vars]
-TURN_APP_ID = ""       # From Cloudflare Realtime dashboard
-TURN_APP_SECRET = ""   # From Cloudflare Realtime dashboard
+TURN_APP_ID = ""
+TURN_APP_SECRET = ""
 MAX_PEERS_PER_ROOM = "10"

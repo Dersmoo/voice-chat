@@ -91,6 +91,20 @@ export class VoiceChatRoom {
         break;
       }
 
+      // Room chat — broadcast to everyone including sender for echo confirmation
+      case "room-chat": {
+        const session = this.sessions.get(senderId);
+        this.broadcast({
+          type:   "room-chat",
+          id:     crypto.randomUUID(),
+          from:   senderId,
+          name:   session?.name ?? senderId,
+          text:   (msg.text ?? "").slice(0, 2000),
+          sentAt: msg.sentAt ?? Date.now(),
+        }); // broadcast to ALL including sender so sender sees confirmation
+        break;
+      }
+
       // Graceful leave (client can also just close the socket)
       case "leave": {
         this.handleClose(senderId);
