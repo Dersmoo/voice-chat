@@ -1,0 +1,14 @@
+{
+  "name": "voice-chat-proxy-bridge",
+  "version": "1.0.0",
+  "description": "Tunnels the voice chat WebSocket signaling through a SOCKS4/5 proxy",
+  "main": "bridge.js",
+  "scripts": {
+    "start": "node bridge.js"
+  },
+  "dependencies": {
+    "socks-proxy-agent": "8.0.4",
+    "ws": "8.18.0",
+    "http-proxy": "1.18.1"
+  }
+}

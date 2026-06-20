@@ -1,0 +1,46 @@
+{
+  "name": "voice-chat-app",
+  "version": "1.0.0",
+  "description": "Voice chat desktop app for Windows",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "build": "electron-builder --win --x64",
+    "pack": "electron-builder --dir"
+  },
+  "dependencies": {
+    "electron-updater": "6.3.9",
+    "socks-proxy-agent": "8.0.4",
+    "ws": "^8.21.0"
+  },
+  "devDependencies": {
+    "electron": "^42.4.1",
+    "electron-builder": "^26.15.3"
+  },
+  "build": {
+    "appId": "com.dercraftia.voicechat",
+    "productName": "Voice Chat",
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "Dersysmoo",
+        "repo": "voice-chat"
+      }
+    ],
+    "win": {
+      "target": "nsis",
+      "icon": "assets/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "src/**/*",
+      "renderer/**/*",
+      "assets/**/*"
+    ]
+  }
+}

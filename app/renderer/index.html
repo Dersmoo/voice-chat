@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self'; connect-src https://voice.dercraftia.com wss://voice.dercraftia.com https://rtc.live.cloudflare.com; script-src 'self'; style-src 'self' 'unsafe-inline';" />
+  <title>Voice Chat</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <!-- Custom titlebar -->
+  <div id="titlebar">
+    <span class="app-name">🎙 Voice Chat</span>
+    <div class="titlebar-controls">
+      <button id="btnMinimize" title="Minimize">─</button>
+      <button id="btnHide"     title="Hide to tray">✕</button>
+    </div>
+  </div>
+
+  <!-- Tab bar -->
+  <nav id="tabs">
+    <button class="tab active" data-tab="voice">Voice</button>
+    <button class="tab"        data-tab="friends">Friends</button>
+    <button class="tab"        data-tab="settings">Settings</button>
+  </nav>
+
+  <!-- ── VOICE TAB ──────────────────────────────────────────────────── -->
+  <div id="tab-voice" class="tab-content active">
+
+    <!-- Join panel -->
+    <div id="joinPanel" class="panel">
+      <div class="field">
+        <label>Room</label>
+        <input id="roomInput" type="text" placeholder="general" maxlength="64" />
+      </div>
+      <button id="joinBtn" class="btn-primary">Join Room</button>
+    </div>
+
+    <!-- In-room panel -->
+    <div id="roomPanel" class="panel" style="display:none">
+      <div id="roomHeader">
+        <span id="roomName"></span>
+        <button id="leaveBtn" class="btn-small btn-danger">Leave</button>
+      </div>
+      <div id="statusBar"></div>
+
+      <!-- Peer list -->
+      <div id="peerList"></div>
+
+      <!-- Controls -->
+      <div id="voiceControls">
+        <button id="muteBtn" class="btn-control" title="Toggle mute">
+          <span id="muteIcon">🎙</span>
+          <span id="muteLabel">Mute</span>
+        </button>
+      </div>
+
+      <!-- Activity log -->
+      <div id="log"></div>
+    </div>
+  </div>
+
+  <!-- ── FRIENDS TAB ────────────────────────────────────────────────── -->
+  <div id="tab-friends" class="tab-content">
+
+    <!-- Your own code -->
+    <div class="section-label">Your friend code</div>
+    <div id="myCodeBox">
+      <span id="myCode">…</span>
+      <button id="copyCodeBtn" class="btn-small" title="Copy to clipboard">Copy</button>
+    </div>
+    <div class="hint">Share this code with friends so they can add you.</div>
+
+    <!-- Add friend -->
+    <div class="section-label">Add friend</div>
+    <div class="row-input">
+      <input id="addCodeInput"  type="text" placeholder="XXXX-XXXX"   maxlength="9" />
+      <input id="addNameInput"  type="text" placeholder="Nickname"     maxlength="32" />
+      <button id="addFriendBtn" class="btn-primary btn-small">Add</button>
+    </div>
+    <div id="addFriendError" class="error-text"></div>
+
+    <!-- Friend list -->
+    <div class="section-label">Friends</div>
+    <div id="friendList"></div>
+  </div>
+
+  <!-- ── SETTINGS TAB ──────────────────────────────────────────────── -->
+  <div id="tab-settings" class="tab-content">
+
+    <div class="section-label">Display name</div>
+    <div class="row-input">
+      <input id="displayNameInput" type="text" placeholder="Your name" maxlength="32" />
+      <button id="saveNameBtn" class="btn-primary btn-small">Save</button>
+    </div>
+
+    <div class="section-label">Server URL</div>
+    <input id="serverUrlInput" type="text" placeholder="https://voice.dercraftia.com" />
+
+    <div class="section-label">SOCKS proxy <span class="hint-inline">(optional)</span></div>
+    <input id="socksInput" type="text" placeholder="socks5://127.0.0.1:1080" />
+    <div class="hint">Leave empty to connect directly. Requires the proxy bridge for WebSocket tunnelling.</div>
+
+    <div class="section-label">Options</div>
+    <label class="checkbox-row">
+      <input type="checkbox" id="startMinimizedChk" />
+      Start minimized to tray
+    </label>
+    <label class="checkbox-row">
+      <input type="checkbox" id="pushToTalkChk" />
+      Push-to-talk (hold <kbd>V</kbd> to speak)
+    </label>
+    <label class="checkbox-row">
+      <input type="checkbox" id="autoUpdateChk" />
+      Automatically check for updates on launch
+    </label>
+
+    <button id="saveSettingsBtn" class="btn-primary" style="margin-top:1rem">Save settings</button>
+    <div id="settingsSaved" class="hint" style="display:none">Saved.</div>
+
+    <!-- Update status -->
+    <div class="section-label" style="margin-top:1rem">Updates</div>
+    <div id="updateStatus" class="hint">–</div>
+    <div style="display:flex;gap:8px;margin-top:6px">
+      <button id="checkUpdateBtn" class="btn-primary btn-small">Check now</button>
+      <button id="installUpdateBtn" class="btn-primary btn-small" style="display:none">Restart &amp; install</button>
+    </div>
+    <div id="updateProgress" style="display:none;margin-top:6px">
+      <div style="background:var(--surface2);border-radius:4px;height:6px;overflow:hidden">
+        <div id="updateProgressBar" style="background:var(--accent);height:100%;width:0%;transition:width 0.3s"></div>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>

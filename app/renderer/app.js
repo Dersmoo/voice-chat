@@ -1,0 +1,383 @@
+"use strict";
+
+/**
+ * Renderer process entry point.
+ * Wires up all UI interactions and bridges them to VoiceClient + the main
+ * process (via window.voiceApp exposed by preload.js).
+ */
+
+import { VoiceClient } from "../src/voiceClient.js";
+
+const api    = window.voiceApp;
+const client = new VoiceClient();
+
+// ── App state ─────────────────────────────────────────────────────────────────
+
+let identity  = null;
+let friends   = [];
+let settings  = null;
+
+// Map of sessionId → { name, code, muted }  — peers currently in the room
+const activePeers = new Map();
+
+// ── Boot ──────────────────────────────────────────────────────────────────────
+
+async function boot() {
+  [identity, friends, settings] = await Promise.all([
+    api.getIdentity(),
+    api.listFriends(),
+    api.getSettings(),
+  ]);
+
+  // Prompt for display name on first launch
+  if (!identity.displayName) {
+    document.getElementById("tab-settings").classList.add("active");
+    document.querySelector('[data-tab="settings"]').classList.add("active");
+    document.getElementById("tab-voice").classList.remove("active");
+    document.querySelector('[data-tab="voice"]').classList.remove("active");
+  }
+
+  populateSettings();
+  renderFriendList();
+
+  document.getElementById("myCode").textContent = identity.code;
+  document.getElementById("displayNameInput").value = identity.displayName;
+}
+
+// ── Tab switching ─────────────────────────────────────────────────────────────
+
+document.querySelectorAll(".tab").forEach(btn => {
+  btn.addEventListener("click", () => {
+    document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
+    document.querySelectorAll(".tab-content").forEach(t => t.classList.remove("active"));
+    btn.classList.add("active");
+    document.getElementById("tab-" + btn.dataset.tab).classList.add("active");
+  });
+});
+
+// ── Titlebar ──────────────────────────────────────────────────────────────────
+
+document.getElementById("btnMinimize").addEventListener("click", () => api.minimize());
+document.getElementById("btnHide").addEventListener("click",     () => api.hide());
+
+// ── Voice tab ─────────────────────────────────────────────────────────────────
+
+const joinBtn    = document.getElementById("joinBtn");
+const leaveBtn   = document.getElementById("leaveBtn");
+const muteBtn    = document.getElementById("muteBtn");
+const roomInput  = document.getElementById("roomInput");
+const joinPanel  = document.getElementById("joinPanel");
+const roomPanel  = document.getElementById("roomPanel");
+const roomNameEl = document.getElementById("roomName");
+const statusEl   = document.getElementById("statusBar");
+
+joinBtn.addEventListener("click", async () => {
+  const room = roomInput.value.trim().replace(/[^a-zA-Z0-9_-]/g, "") || "general";
+  const name = identity.displayName || "Anonymous";
+
+  joinBtn.disabled = true;
+  statusEl.textContent = "Connecting…";
+
+  try {
+    await client.connect({
+      serverUrl:  settings.serverUrl,
+      roomId:     room,
+      displayName: name,
+      friendCode:  identity.code,
+      pushToTalk:  settings.pushToTalk,
+    });
+  } catch (err) {
+    statusEl.textContent = "Failed: " + err.message;
+    joinBtn.disabled = false;
+  }
+});
+
+leaveBtn.addEventListener("click", async () => {
+  await client.disconnect();
+});
+
+muteBtn.addEventListener("click", () => {
+  client.setMute(!client.muted);
+});
+
+// Push-to-talk global key (V)
+document.addEventListener("keydown", (e) => {
+  if (e.code === "KeyV" && !e.repeat && settings?.pushToTalk) {
+    client.pttDown();
+    updateMuteButton(false);
+  }
+});
+document.addEventListener("keyup", (e) => {
+  if (e.code === "KeyV" && settings?.pushToTalk) {
+    client.pttUp();
+    updateMuteButton(true);
+  }
+});
+
+// ── VoiceClient events ────────────────────────────────────────────────────────
+
+client.addEventListener("connected", () => {
+  const room = roomInput.value.trim().replace(/[^a-zA-Z0-9_-]/g, "") || "general";
+  joinPanel.style.display  = "none";
+  roomPanel.style.display  = "flex";
+  roomNameEl.textContent   = "# " + room;
+  statusEl.textContent     = "Connected";
+  joinBtn.disabled         = false;
+
+  // Add self to peer list
+  addPeerRow("__self__", identity.displayName || "You", identity.code, false);
+  log("Joined room");
+});
+
+client.addEventListener("disconnected", () => {
+  roomPanel.style.display = "none";
+  joinPanel.style.display = "flex";
+  activePeers.clear();
+  document.getElementById("peerList").innerHTML = "";
+  document.getElementById("log").innerHTML = "";
+  statusEl.textContent = "";
+  log("Left room");
+});
+
+client.addEventListener("micError", ({ detail }) => {
+  statusEl.textContent = "Mic error: " + detail.message;
+  joinBtn.disabled = false;
+});
+
+client.addEventListener("peerJoined", async ({ detail }) => {
+  activePeers.set(detail.id, { name: detail.name, code: detail.code, muted: false });
+  addPeerRow(detail.id, detail.name, detail.code, false);
+  log(detail.name + " joined");
+
+  // If this peer is in our friend list, sync their stored nickname to their
+  // current display name so the friend list stays up to date automatically.
+  if (detail.code) {
+    const match = friends.find(f => f.code === detail.code);
+    if (match && match.displayName !== detail.name) {
+      friends = await api.renameFriend(detail.code, detail.name);
+      renderFriendList();
+    }
+  }
+});
+
+client.addEventListener("peerLeft", ({ detail }) => {
+  const peer = activePeers.get(detail.id);
+  if (peer) log(peer.name + " left");
+  activePeers.delete(detail.id);
+  document.getElementById("peer-" + CSS.escape(detail.id))?.remove();
+});
+
+client.addEventListener("peerMuteChanged", ({ detail }) => {
+  const peer = activePeers.get(detail.id);
+  if (peer) peer.muted = detail.muted;
+  const dot = document.querySelector(`#peer-${CSS.escape(detail.id)} .peer-dot`);
+  if (dot) dot.classList.toggle("muted", detail.muted);
+});
+
+client.addEventListener("error", ({ detail }) => {
+  log("Error: " + detail.message);
+});
+
+client.addEventListener("muteChanged", ({ detail }) => {
+  updateMuteButton(detail.muted);
+});
+
+// ── Peer list helpers ─────────────────────────────────────────────────────────
+
+function isFriend(code) {
+  return !!code && friends.some(f => f.code === code);
+}
+
+function addPeerRow(sessionId, name, code, muted) {
+  const existing = document.getElementById("peer-" + sessionId);
+  if (existing) existing.remove();
+
+  const row = document.createElement("div");
+  row.className = "peer-row" + (isFriend(code) ? " is-friend" : "");
+  row.id = "peer-" + sessionId;
+
+  const dot = document.createElement("span");
+  dot.className = "peer-dot" + (muted ? " muted" : "");
+
+  const nameEl = document.createElement("span");
+  nameEl.className = "peer-name";
+  nameEl.textContent = name;
+
+  row.appendChild(dot);
+  row.appendChild(nameEl);
+
+  if (isFriend(code)) {
+    const badge = document.createElement("span");
+    badge.className = "peer-badge";
+    badge.textContent = "friend";
+    row.appendChild(badge);
+  }
+
+  document.getElementById("peerList").appendChild(row);
+}
+
+function updateMuteButton(muted) {
+  document.getElementById("muteIcon").textContent  = muted ? "🔇" : "🎙";
+  document.getElementById("muteLabel").textContent = muted ? "Unmute" : "Muted";
+  muteBtn.classList.toggle("active", muted);
+}
+
+// ── Friends tab ───────────────────────────────────────────────────────────────
+
+document.getElementById("copyCodeBtn").addEventListener("click", () => {
+  navigator.clipboard.writeText(identity.code).catch(() => {});
+  document.getElementById("copyCodeBtn").textContent = "Copied!";
+  setTimeout(() => (document.getElementById("copyCodeBtn").textContent = "Copy"), 1500);
+});
+
+document.getElementById("addFriendBtn").addEventListener("click", async () => {
+  const rawCode = document.getElementById("addCodeInput").value.trim().toUpperCase();
+  const name    = document.getElementById("addNameInput").value.trim();
+  const errEl   = document.getElementById("addFriendError");
+
+  errEl.textContent = "";
+
+  const result = await api.addFriend(rawCode, name);
+  if (result.error) {
+    errEl.textContent = result.error;
+    return;
+  }
+
+  friends = await api.listFriends();
+  renderFriendList();
+  document.getElementById("addCodeInput").value = "";
+  document.getElementById("addNameInput").value = "";
+});
+
+// Format code input as user types (auto-insert dash)
+document.getElementById("addCodeInput").addEventListener("input", (e) => {
+  let v = e.target.value.toUpperCase().replace(/[^0-9A-Z]/g, "");
+  if (v.length > 4) v = v.slice(0, 4) + "-" + v.slice(4, 8);
+  e.target.value = v;
+});
+
+function renderFriendList() {
+  const list = document.getElementById("friendList");
+  list.innerHTML = "";
+
+  if (!friends.length) {
+    const empty = document.createElement("div");
+    empty.className = "hint";
+    empty.textContent = "No friends added yet.";
+    list.appendChild(empty);
+    return;
+  }
+
+  for (const f of friends) {
+    const row = document.createElement("div");
+    row.className = "friend-row";
+
+    const nameEl = document.createElement("span");
+    nameEl.className = "friend-name";
+    nameEl.textContent = f.displayName;
+
+    const codeEl = document.createElement("span");
+    codeEl.className = "friend-code";
+    codeEl.textContent = f.code;
+
+    const removeBtn = document.createElement("button");
+    removeBtn.textContent = "✕";
+    removeBtn.title = "Remove friend";
+    removeBtn.addEventListener("click", async () => {
+      friends = await api.removeFriend(f.code);
+      renderFriendList();
+    });
+
+    row.appendChild(nameEl);
+    row.appendChild(codeEl);
+    row.appendChild(removeBtn);
+    list.appendChild(row);
+  }
+}
+
+// ── Settings tab ──────────────────────────────────────────────────────────────
+
+function populateSettings() {
+  document.getElementById("serverUrlInput").value      = settings.serverUrl;
+  document.getElementById("socksInput").value          = settings.socksProxy ?? "";
+  document.getElementById("startMinimizedChk").checked = settings.startMinimized;
+  document.getElementById("pushToTalkChk").checked     = settings.pushToTalk;
+  document.getElementById("autoUpdateChk").checked     = settings.autoUpdate ?? true;
+}
+
+document.getElementById("saveNameBtn").addEventListener("click", async () => {
+  const name = document.getElementById("displayNameInput").value.trim();
+  identity = await api.setDisplayName(name);
+});
+
+document.getElementById("saveSettingsBtn").addEventListener("click", async () => {
+  const patch = {
+    serverUrl:      document.getElementById("serverUrlInput").value.trim() || "https://voice.dercraftia.com",
+    socksProxy:     document.getElementById("socksInput").value.trim(),
+    startMinimized: document.getElementById("startMinimizedChk").checked,
+    pushToTalk:     document.getElementById("pushToTalkChk").checked,
+    autoUpdate:     document.getElementById("autoUpdateChk").checked,
+  };
+  settings = await api.saveSettings(patch);
+  populateSettings();
+
+  const saved = document.getElementById("settingsSaved");
+  saved.style.display = "block";
+  setTimeout(() => (saved.style.display = "none"), 2000);
+});
+
+// ── Auto-updater UI ───────────────────────────────────────────────────────────
+
+const updateStatusEl   = document.getElementById("updateStatus");
+const updateProgressEl = document.getElementById("updateProgress");
+const updateBarEl      = document.getElementById("updateProgressBar");
+const installBtn       = document.getElementById("installUpdateBtn");
+const checkBtn         = document.getElementById("checkUpdateBtn");
+
+checkBtn.addEventListener("click", async () => {
+  updateStatusEl.textContent = "Checking…";
+  await api.checkForUpdate();
+});
+
+installBtn.addEventListener("click", () => {
+  api.installUpdate();
+});
+
+api.onUpdateAvailable(({ version }) => {
+  updateStatusEl.textContent = `Version ${version} available — downloading…`;
+  updateProgressEl.style.display = "block";
+  api.downloadUpdate();
+});
+
+api.onUpdateProgress(({ percent }) => {
+  updateBarEl.style.width = percent + "%";
+  updateStatusEl.textContent = `Downloading… ${percent}%`;
+});
+
+api.onUpdateDownloaded(() => {
+  updateProgressEl.style.display = "none";
+  updateStatusEl.textContent = "Update ready. Restart to install.";
+  installBtn.style.display = "inline-block";
+});
+
+api.onUpdateNotAvailable(() => {
+  updateStatusEl.textContent = "You're on the latest version.";
+});
+
+api.onUpdateError(({ message }) => {
+  updateStatusEl.textContent = "Update error: " + message;
+});
+
+// ── Activity log ──────────────────────────────────────────────────────────────
+
+function log(msg) {
+  const logEl = document.getElementById("log");
+  const line  = document.createElement("div");
+  line.textContent = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })
+                   + "  " + msg;
+  logEl.appendChild(line);
+  logEl.scrollTop = logEl.scrollHeight;
+}
+
+// ── Start ─────────────────────────────────────────────────────────────────────
+boot();
