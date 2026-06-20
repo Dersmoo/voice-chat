@@ -106,11 +106,12 @@ joinBtn.addEventListener("click", async () => {
 
   try {
     await client.connect({
-      serverUrl:  settings.serverUrl,
-      roomId:     room,
+      serverUrl:   settings.serverUrl,
+      roomId:      room,
       displayName: name,
       friendCode:  identity.code,
       pushToTalk:  settings.pushToTalk,
+      audioInputId: settings.audioInputId ?? null,
     });
   } catch (err) {
     statusEl.textContent = "Failed: " + err.message;
@@ -213,6 +214,21 @@ client.addEventListener("peerMuteChanged", ({ detail }) => {
   if (peer) peer.muted = detail.muted;
   const dot = document.querySelector(`#peer-${CSS.escape(detail.id)} .peer-dot`);
   if (dot) dot.classList.toggle("muted", detail.muted);
+});
+
+client.addEventListener("peerAudioAttached", async ({ detail }) => {
+  const state = client.peers.get(detail.id);
+  if (!state?.audioEl) return;
+
+  // Apply saved output volume
+  const vol = (settings.outputVolume ?? 100) / 100;
+  state.audioEl.volume = Math.min(vol, 1);
+
+  // Apply saved output device
+  const deviceId = settings.audioOutputId;
+  if (deviceId && state.audioEl.setSinkId) {
+    try { await state.audioEl.setSinkId(deviceId); } catch {}
+  }
 });
 
 client.addEventListener("error", ({ detail }) => {
@@ -345,6 +361,15 @@ function populateSettings() {
   document.getElementById("startMinimizedChk").checked = settings.startMinimized;
   document.getElementById("pushToTalkChk").checked     = settings.pushToTalk;
   document.getElementById("autoUpdateChk").checked     = settings.autoUpdate ?? true;
+
+  // Audio
+  const micVol = settings.micVolume ?? 100;
+  const outVol = settings.outputVolume ?? 100;
+  micVolumeSlider.value    = micVol;
+  micVolumeLabel.textContent = micVol + "%";
+  outputVolumeSlider.value = outVol;
+  outputVolumeLabel.textContent = outVol + "%";
+  applyOutputVolume(outVol);
 }
 
 document.getElementById("saveNameBtn").addEventListener("click", async () => {
@@ -359,6 +384,10 @@ document.getElementById("saveSettingsBtn").addEventListener("click", async () =>
     startMinimized: document.getElementById("startMinimizedChk").checked,
     pushToTalk:     document.getElementById("pushToTalkChk").checked,
     autoUpdate:     document.getElementById("autoUpdateChk").checked,
+    audioInputId:   audioInputSelect.value,
+    audioOutputId:  audioOutputSelect.value,
+    micVolume:      parseInt(micVolumeSlider.value),
+    outputVolume:   parseInt(outputVolumeSlider.value),
   };
   settings = await api.saveSettings(patch);
   populateSettings();
@@ -368,7 +397,138 @@ document.getElementById("saveSettingsBtn").addEventListener("click", async () =>
   setTimeout(() => (saved.style.display = "none"), 2000);
 });
 
-// ── Auto-updater UI ───────────────────────────────────────────────────────────
+// ── Audio settings ────────────────────────────────────────────────────────────
+
+const audioInputSelect   = document.getElementById("audioInputSelect");
+const audioOutputSelect  = document.getElementById("audioOutputSelect");
+const micVolumeSlider    = document.getElementById("micVolumeSlider");
+const micVolumeLabel     = document.getElementById("micVolumeLabel");
+const outputVolumeSlider = document.getElementById("outputVolumeSlider");
+const outputVolumeLabel  = document.getElementById("outputVolumeLabel");
+const testAudioBtn       = document.getElementById("testAudioBtn");
+const audioTestStatus    = document.getElementById("audioTestStatus");
+
+// AudioContext for mic gain
+let audioCtx    = null;
+let gainNode    = null;
+let sourceNode  = null;
+
+async function populateAudioDevices() {
+  // Need permission first so labels are populated
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    stream.getTracks().forEach(t => t.stop());
+  } catch {}
+
+  const devices = await navigator.mediaDevices.enumerateDevices();
+
+  audioInputSelect.innerHTML  = "";
+  audioOutputSelect.innerHTML = "";
+
+  const inputs  = devices.filter(d => d.kind === "audioinput");
+  const outputs = devices.filter(d => d.kind === "audiooutput");
+
+  for (const d of inputs) {
+    const opt = document.createElement("option");
+    opt.value       = d.deviceId;
+    opt.textContent = d.label || `Microphone ${audioInputSelect.length + 1}`;
+    if (d.deviceId === (settings.audioInputId ?? "default")) opt.selected = true;
+    audioInputSelect.appendChild(opt);
+  }
+
+  for (const d of outputs) {
+    const opt = document.createElement("option");
+    opt.value       = d.deviceId;
+    opt.textContent = d.label || `Speaker ${audioOutputSelect.length + 1}`;
+    if (d.deviceId === (settings.audioOutputId ?? "default")) opt.selected = true;
+    audioOutputSelect.appendChild(opt);
+  }
+}
+
+function applyMicGain(value) {
+  // value = 0–200, 100 = unity gain
+  if (gainNode) gainNode.gain.value = value / 100;
+}
+
+function applyOutputVolume(value) {
+  // Apply to all active peer audio elements
+  const vol = value / 100;
+  for (const [, state] of client.peers) {
+    if (state.audioEl) state.audioEl.volume = Math.min(vol, 1);
+  }
+  // Store for new peers to pick up
+  window._outputVolume = vol;
+}
+
+micVolumeSlider.addEventListener("input", () => {
+  const v = parseInt(micVolumeSlider.value);
+  micVolumeLabel.textContent = v + "%";
+  applyMicGain(v);
+});
+
+outputVolumeSlider.addEventListener("input", () => {
+  const v = parseInt(outputVolumeSlider.value);
+  outputVolumeLabel.textContent = v + "%";
+  applyOutputVolume(v);
+});
+
+audioInputSelect.addEventListener("change", () => {
+  // Restart mic with new device if currently connected
+  if (client.localStream) {
+    client.localStream.getTracks().forEach(t => t.stop());
+    navigator.mediaDevices.getUserMedia({
+      audio: {
+        deviceId:         { exact: audioInputSelect.value },
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl:  true,
+      }
+    }).then(stream => {
+      client.localStream = stream;
+      applyMicGain(parseInt(micVolumeSlider.value));
+      // Replace tracks in all peer connections
+      for (const [, state] of client.peers) {
+        const sender = state.pc.getSenders().find(s => s.track?.kind === "audio");
+        if (sender) sender.replaceTrack(stream.getAudioTracks()[0]);
+      }
+    }).catch(() => {});
+  }
+});
+
+audioOutputSelect.addEventListener("change", async () => {
+  // setSinkId is supported in Electron
+  for (const [, state] of client.peers) {
+    if (state.audioEl?.setSinkId) {
+      try { await state.audioEl.setSinkId(audioOutputSelect.value); } catch {}
+    }
+  }
+});
+
+// Test output — play a short 440Hz tone
+testAudioBtn.addEventListener("click", () => {
+  try {
+    const ctx  = new AudioContext();
+    const osc  = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.frequency.value = 440;
+    gain.gain.value     = 0.2;
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start();
+    osc.stop(ctx.currentTime + 0.6);
+    osc.onended = () => ctx.close();
+    audioTestStatus.textContent = "Playing test tone…";
+    setTimeout(() => { audioTestStatus.textContent = ""; }, 1200);
+  } catch (e) {
+    audioTestStatus.textContent = "Error: " + e.message;
+  }
+});
+
+// Populate on settings tab open
+document.querySelector('[data-tab="settings"]').addEventListener("click", populateAudioDevices);
+
+// Also watch for device changes (plugging in headphones etc.)
+navigator.mediaDevices.addEventListener("devicechange", populateAudioDevices);
 
 const updateStatusEl   = document.getElementById("updateStatus");
 const updateProgressEl = document.getElementById("updateProgress");

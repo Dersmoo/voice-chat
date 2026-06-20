@@ -64,7 +64,11 @@ const DEFAULT_SETTINGS = {
   socksProxy:     "",
   startMinimized: false,
   pushToTalk:     false,
-  autoUpdate:     true,   // check for updates on launch by default
+  autoUpdate:     true,
+  audioInputId:   "",
+  audioOutputId:  "",
+  micVolume:      100,
+  outputVolume:   100,
 };
 
 function loadSettings() {

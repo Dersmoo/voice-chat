@@ -41,14 +41,15 @@ export class VoiceClient extends EventTarget {
    * @param {boolean} [opts.pushToTalk]
    * @param {string}  [opts.socksProxy]  ignored in renderer (bridge handles it)
    */
-  async connect({ serverUrl, roomId, displayName, friendCode, pushToTalk = false }) {
+  async connect({ serverUrl, roomId, displayName, friendCode, pushToTalk = false, audioInputId = null }) {
     if (this.ws) await this.disconnect();
 
     this.roomId      = roomId;
     this.myName      = displayName;
     this.myCode      = friendCode;
     this._pushToTalk = pushToTalk;
-    this._muted      = pushToTalk; // start muted if PTT
+    this._muted      = pushToTalk;
+    this._audioInputId = audioInputId; // start muted if PTT
 
     // 1. Fetch TURN credentials
     try {
@@ -251,13 +252,17 @@ export class VoiceClient extends EventTarget {
 
   async _startMic() {
     try {
+      const audioConstraints = {
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl:  true,
+        sampleRate: 48000,
+      };
+      if (this._audioInputId) {
+        audioConstraints.deviceId = { exact: this._audioInputId };
+      }
       this.localStream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl:  true,
-          sampleRate: 48000,
-        },
+        audio: audioConstraints,
         video: false,
       });
       this._applyMute();

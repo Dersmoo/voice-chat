@@ -580,3 +580,38 @@ kbd {
   accent-color: var(--accent);
   cursor: pointer;
 }
+
+/* ── Audio settings ────────────────────────────────────────────────────────── */
+.audio-select {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text);
+  padding: 6px 8px;
+  font-size: 12px;
+  width: 100%;
+  cursor: pointer;
+  outline: none;
+}
+.audio-select:focus { border-color: var(--accent); }
+
+.slider-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.slider-row input[type="range"] {
+  flex: 1;
+  accent-color: var(--accent);
+  cursor: pointer;
+  height: 4px;
+}
+
+.secondary {
+  background: var(--surface2);
+  color: var(--text);
+  border: 1px solid var(--border);
+  padding: 5px 12px;
+}
+.secondary:hover { background: var(--border); }

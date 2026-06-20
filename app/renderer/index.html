@@ -187,6 +187,26 @@
     <button id="saveSettingsBtn" class="btn-primary" style="margin-top:1rem">Save settings</button>
     <div id="settingsSaved" class="hint" style="display:none">Saved.</div>
 
+    <!-- Audio devices -->
+    <div class="section-label" style="margin-top:1rem">Audio input</div>
+    <select id="audioInputSelect" class="audio-select"></select>
+    <div class="section-label">Microphone volume</div>
+    <div class="slider-row">
+      <input type="range" id="micVolumeSlider" min="0" max="200" value="100" />
+      <span id="micVolumeLabel" class="hint">100%</span>
+    </div>
+
+    <div class="section-label">Audio output</div>
+    <select id="audioOutputSelect" class="audio-select"></select>
+    <div class="section-label">Output volume</div>
+    <div class="slider-row">
+      <input type="range" id="outputVolumeSlider" min="0" max="200" value="100" />
+      <span id="outputVolumeLabel" class="hint">100%</span>
+    </div>
+
+    <button id="testAudioBtn" class="btn-small secondary" style="margin-top:4px">Test output</button>
+    <div class="hint" id="audioTestStatus" style="min-height:16px"></div>
+
     <!-- Update status -->
     <div class="section-label" style="margin-top:1rem">Updates</div>
     <div id="updateStatus" class="hint">–</div>
