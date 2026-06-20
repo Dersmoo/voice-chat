@@ -82,21 +82,30 @@ run(`git tag ${tag}`);
 step("Building Windows installer");
 run("npm run build", APP_DIR);
 
-// Find the installer and blockmap
-const exeName       = `Voice Chat Setup ${version}.exe`;
-const blockmapName  = `${exeName}.blockmap`;
-const exePath       = path.join(DIST_DIR, exeName);
-const blockmapPath  = path.join(DIST_DIR, blockmapName);
-const latestYml     = path.join(DIST_DIR, "latest.yml");
+// electron-builder names the file with spaces ("Voice Chat Setup x.x.x.exe")
+// but latest.yml references it with hyphens ("Voice-Chat-Setup-x.x.x.exe").
+// We rename to match so electron-updater can download it correctly.
+const exeSpaced    = path.join(DIST_DIR, `Voice Chat Setup ${version}.exe`);
+const exeHyphens   = path.join(DIST_DIR, `Voice-Chat-Setup-${version}.exe`);
+const bmSpaced     = `${exeSpaced}.blockmap`;
+const bmHyphens    = `${exeHyphens}.blockmap`;
 
-if (!fs.existsSync(exePath)) {
-  console.error(`Build output not found: ${exePath}`);
+if (!fs.existsSync(exeSpaced)) {
+  console.error(`Build output not found: ${exeSpaced}`);
   console.error("The build may have failed. Check the output above.");
   process.exit(1);
 }
 
+// Rename to hyphenated form
+fs.renameSync(exeSpaced, exeHyphens);
+if (fs.existsSync(bmSpaced)) fs.renameSync(bmSpaced, bmHyphens);
+
+const exePath      = exeHyphens;
+const blockmapPath = bmHyphens;
+const latestYml    = path.join(DIST_DIR, "latest.yml");
+
 const sizeMB = (fs.statSync(exePath).size / 1024 / 1024).toFixed(1);
-console.log(`Built: ${exeName} (${sizeMB} MB)`);
+console.log(`Built: Voice-Chat-Setup-${version}.exe (${sizeMB} MB)`);
 
 // ── Push ──────────────────────────────────────────────────────────────────────
 
