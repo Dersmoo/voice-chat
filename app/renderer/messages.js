@@ -117,10 +117,26 @@ function initMessagesTab() {
     activeConvId = convId;
     mc.markRead(convId);
 
-    // Fetch history if we have < 50 messages cached
-    const cached = mc.conversations.get(convId);
-    if (!cached || cached.messages.length < 50) {
+    // Ensure the conversation entry exists in the cache with at least a stub meta
+    if (!mc.conversations.has(convId)) {
+      mc.conversations.set(convId, { meta: null, messages: [] });
+    }
+
+    // Fetch history (also populates meta from server)
+    try {
       await mc.fetchHistory(convId);
+    } catch {}
+
+    // If meta still missing (brand new DM, server hasn't stored it yet), build a stub
+    const entry = mc.conversations.get(convId);
+    if (entry && !entry.meta) {
+      entry.meta = {
+        id:      convId,
+        type:    convId.startsWith("grp:") ? "group"
+               : convId.startsWith("room:") ? "room" : "dm",
+        name:    "",
+        members: [identity.code],
+      };
     }
 
     renderConvList();
@@ -129,13 +145,13 @@ function initMessagesTab() {
 
     const meta = mc.conversations.get(convId)?.meta;
     if (meta) {
-      convHeaderName.textContent = getConvName(meta);
-      convHeaderSub.textContent  = meta.type === "group"
+      convHeaderName.textContent    = getConvName(meta);
+      convHeaderSub.textContent     = meta.type === "group"
         ? `${meta.members.length} members`
         : meta.type === "room" ? "Room chat" : "Direct message";
-      convHeader.style.display  = "flex";
+      convHeader.style.display      = "flex";
       convPlaceholder.style.display = "none";
-      composeBar.style.display  = "flex";
+      composeBar.style.display      = "flex";
       composeInput.focus();
     }
   }
