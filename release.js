@@ -112,11 +112,21 @@ const releaseFiles = [`"${exePath}"`];
 if (fs.existsSync(blockmapPath)) releaseFiles.push(`"${blockmapPath}"`);
 if (fs.existsSync(latestYml))    releaseFiles.push(`"${latestYml}"`);
 
+// Check if release already exists and delete it first (can happen if a previous run partially succeeded)
+try {
+  execSync(`gh release view ${tag} --repo Dersmoo/voice-chat`, { cwd: ROOT, stdio: "pipe" });
+  console.log(`Release ${tag} already exists — deleting and recreating...`);
+  execSync(`gh release delete ${tag} --repo Dersmoo/voice-chat --yes`, { cwd: ROOT, stdio: "inherit" });
+} catch {
+  // Release doesn't exist yet, that's fine
+}
+
 run(
   `gh release create ${tag} ${releaseFiles.join(" ")} ` +
   `--title "Voice Chat ${tag}" ` +
   `--notes "Release ${tag}" ` +
-  `--latest`
+  `--latest ` +
+  `--repo Dersmoo/voice-chat`
 );
 
 // ── Done ──────────────────────────────────────────────────────────────────────
