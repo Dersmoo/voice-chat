@@ -1,6 +1,6 @@
 {
   "name": "voice-chat-app",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "description": "Voice chat desktop app for Windows",
   "author": "Dersmoo",
   "main": "main.js",
