@@ -87,6 +87,7 @@
         <span id="convHeaderName"></span>
         <span id="convHeaderSub" class="hint"></span>
         <div id="convHeaderActions">
+          <button id="callBtn" class="btn-small btn-primary" style="display:none">📞 Call</button>
           <button id="favBtn" class="btn-small secondary" style="display:none"></button>
           <button id="deleteConvBtn" class="btn-small btn-danger" style="display:none">Delete</button>
         </div>
@@ -235,5 +236,17 @@
 
   <script type="module" src="app.js"></script>
   <script type="module" src="messages.js"></script>
+
+  <!-- Incoming call notification -->
+  <div id="callToast" style="display:none">
+    <div id="callToastInner">
+      <div id="callToastTitle">📞 Incoming call</div>
+      <div id="callToastFrom" class="hint"></div>
+      <div style="display:flex;gap:8px;margin-top:10px">
+        <button id="callAcceptBtn" class="btn-primary btn-small">Accept</button>
+        <button id="callDeclineBtn" class="btn-small btn-danger">Decline</button>
+      </div>
+    </div>
+  </div>
 </body>
 </html>

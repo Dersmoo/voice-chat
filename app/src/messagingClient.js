@@ -162,6 +162,26 @@ export class MessagingClient extends EventTarget {
         });
         break;
       }
+
+      case "call-invite": {
+        this._emit("callInvite", {
+          fromCode: data.fromCode,
+          fromName: data.fromName,
+          roomId:   data.roomId,
+          convId:   data.convId,
+        });
+        break;
+      }
+
+      case "call-accept": {
+        this._emit("callAccepted", { fromCode: data.fromCode, roomId: data.roomId });
+        break;
+      }
+
+      case "call-decline": {
+        this._emit("callDeclined", { fromCode: data.fromCode, roomId: data.roomId });
+        break;
+      }
     }
   }
 
@@ -284,16 +304,18 @@ export class MessagingClient extends EventTarget {
 
     const cached = this.conversations.get(convId);
     if (cached) {
-      // Prepend fetched messages (they are older)
-      const existing = new Set(cached.messages.map(m => m.id));
-      const fresh    = data.messages.filter(m => !existing.has(m.id));
-      cached.messages = [...fresh, ...cached.messages];
+      // Remove any pending/optimistic messages before merging server history
+      const serverIds  = new Set((data.messages ?? []).map(m => m.id));
+      const nonPending = cached.messages.filter(m =>
+        !m.id.startsWith("pending-") && !serverIds.has(m.id)
+      );
+      cached.messages = [...(data.messages ?? []), ...nonPending];
       if (data.meta && !cached.meta) cached.meta = data.meta;
     } else {
-      this.conversations.set(convId, { meta: data.meta, messages: data.messages });
+      this.conversations.set(convId, { meta: data.meta, messages: data.messages ?? [] });
     }
 
-    return data.messages;
+    return data.messages ?? [];
   }
 
   // ── Send ───────────────────────────────────────────────────────────────────
@@ -316,9 +338,13 @@ export class MessagingClient extends EventTarget {
 
     const data = await res.json();
     if (data.message) {
-      // Add own message to local cache
+      // Add to cache — but only if not already added optimistically by the UI
+      // (UI uses pending-xxx ids; server message has a real UUID)
       const cached = this.conversations.get(convId);
-      if (cached) cached.messages.push(data.message);
+      if (cached) {
+        const alreadyHas = cached.messages.some(m => m.id === data.message.id);
+        if (!alreadyHas) cached.messages.push(data.message);
+      }
       this._emit("messageSent", { message: data.message, conversationId: convId });
     }
     return data;
@@ -335,6 +361,38 @@ export class MessagingClient extends EventTarget {
     let total = 0;
     for (const count of this.unread.values()) total += count;
     return total;
+  }
+
+  // ── Direct calls ──────────────────────────────────────────────────────────
+
+  async sendCallInvite(toCode, roomId, convId) {
+    await fetch(`${this.serverUrl}/inbox/${toCode}/call-invite`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        fromCode:    this.myCode,
+        fromName:    this.myName,
+        roomId,
+        convId,
+        sentAt:      Date.now(),
+      }),
+    }).catch(() => {});
+  }
+
+  async sendCallAccept(toCode, roomId) {
+    await fetch(`${this.serverUrl}/inbox/${toCode}/call-accept`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ fromCode: this.myCode, roomId }),
+    }).catch(() => {});
+  }
+
+  async sendCallDecline(toCode, roomId) {
+    await fetch(`${this.serverUrl}/inbox/${toCode}/call-decline`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ fromCode: this.myCode, roomId }),
+    }).catch(() => {});
   }
 
   // ── Friend requests ────────────────────────────────────────────────────────

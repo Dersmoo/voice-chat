@@ -32,6 +32,9 @@ export class UserInbox {
       case "add-conversation":      return this.handleAddConversation(request);
       case "remove-conversation":   return this.handleRemoveConversation(request);
       case "friend-request":        return this.handleFriendRequest(request);
+      case "call-invite":           return this.handleCallSignal(request, "call-invite");
+      case "call-accept":           return this.handleCallSignal(request, "call-accept");
+      case "call-decline":          return this.handleCallSignal(request, "call-decline");
       default:
         return new Response("Not found", { status: 404 });
     }
@@ -149,6 +152,21 @@ export class UserInbox {
       });
       await this.state.storage.put("conversations", convos);
     }
+  }
+
+  async handleCallSignal(request, type) {
+    const body = await request.json();
+    const msg  = { type, ...body };
+    if (this.socket) {
+      this.safeSend(this.socket, msg);
+    } else if (type === "call-invite") {
+      // Queue missed call invites so user sees them when they come online
+      const key = `queue:${Date.now()}:call:${body.fromCode}`;
+      await this.state.storage.put(key, msg);
+    }
+    return new Response(JSON.stringify({ ok: true }), {
+      headers: { "Content-Type": "application/json" },
+    });
   }
 
   async handleFriendRequest(request) {

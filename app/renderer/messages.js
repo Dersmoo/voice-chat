@@ -171,9 +171,10 @@ function initMessagesTab() {
 
       // Update header action buttons
       const isFav = favourites.has(convId);
-      favBtn.textContent = isFav ? "★ Unfavourite" : "☆ Favourite";
-      favBtn.style.display      = meta.type !== "room" ? "inline-block" : "none";
+      favBtn.textContent          = isFav ? "★ Unfavourite" : "☆ Favourite";
+      favBtn.style.display        = meta.type !== "room" ? "inline-block" : "none";
       deleteConvBtn.style.display = meta.type !== "room" ? "inline-block" : "none";
+      callBtn.style.display       = meta.type !== "room" ? "inline-block" : "none";
     }
   }
 
@@ -447,6 +448,87 @@ function initMessagesTab() {
     renderConvList();
     openConversation(convId);
   });
+
+  // ── Call button ────────────────────────────────────────────────────────────
+
+  const callBtn       = document.getElementById("callBtn");
+  const callToast     = document.getElementById("callToast");
+  const callToastFrom = document.getElementById("callToastFrom");
+  const callAcceptBtn = document.getElementById("callAcceptBtn");
+  const callDeclineBtn= document.getElementById("callDeclineBtn");
+
+  let pendingCall = null; // { fromCode, fromName, roomId, convId }
+
+  callBtn.addEventListener("click", async () => {
+    const meta = mc.conversations.get(activeConvId)?.meta;
+    if (!meta) return;
+
+    // Generate a unique room ID for this call
+    const roomId = `call-${crypto.randomUUID().slice(0, 8)}`;
+
+    // Send invite to all other members
+    for (const code of meta.members) {
+      if (code === identity.code) continue;
+      await mc.sendCallInvite(code, roomId, activeConvId);
+    }
+
+    // Join the room ourselves
+    joinCallRoom(roomId);
+  });
+
+  // Incoming call invite
+  mc.addEventListener("callInvite", ({ detail }) => {
+    pendingCall = detail;
+    callToastFrom.textContent = `${detail.fromName || detail.fromCode} is calling…`;
+    callToast.style.display   = "block";
+
+    // Auto-decline after 30s
+    setTimeout(() => {
+      if (pendingCall?.roomId === detail.roomId) {
+        declineCall();
+      }
+    }, 30000);
+  });
+
+  mc.addEventListener("callAccepted", ({ detail }) => {
+    // Other side accepted — they'll join the room themselves
+  });
+
+  mc.addEventListener("callDeclined", ({ detail }) => {
+    // Show declined status briefly if we were the caller
+    callBtn.textContent = "📞 Declined";
+    setTimeout(() => { callBtn.textContent = "📞 Call"; }, 3000);
+  });
+
+  callAcceptBtn.addEventListener("click", async () => {
+    if (!pendingCall) return;
+    const { fromCode, roomId } = pendingCall;
+    callToast.style.display = "none";
+    await mc.sendCallAccept(fromCode, roomId);
+    joinCallRoom(roomId);
+    pendingCall = null;
+  });
+
+  callDeclineBtn.addEventListener("click", declineCall);
+
+  function declineCall() {
+    if (!pendingCall) return;
+    mc.sendCallDecline(pendingCall.fromCode, pendingCall.roomId);
+    callToast.style.display = "none";
+    pendingCall = null;
+  }
+
+  function joinCallRoom(roomId) {
+    // Switch to voice tab and pre-fill room name, then join
+    document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
+    document.querySelectorAll(".tab-content").forEach(t => t.classList.remove("active"));
+    document.querySelector('[data-tab="voice"]').classList.add("active");
+    document.getElementById("tab-voice").classList.add("active");
+
+    const roomInput = document.getElementById("roomInput");
+    roomInput.value = roomId;
+    document.getElementById("joinBtn").click();
+  }
 
   // ── Expose for app.js ─────────────────────────────────────────────────────
 
